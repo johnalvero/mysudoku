@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { generateSudoku, Difficulty, BLANK } from "@/lib/sudoku";
+import { generateSudoku, Difficulty, BLANK, isValidMove } from "@/lib/sudoku";
 import { Header } from "./Header";
 import { Board } from "./Board";
 import { Controls } from "./Controls";
@@ -247,6 +247,25 @@ export default function Game() {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isWon, selectedCell, handleNumberClick, handleErase]);
 
+    // Calculate valid candidates for the selected cell (Box only)
+    const validCandidates = selectedCell && initialBoard[selectedCell[0]][selectedCell[1]] === BLANK
+        ? (() => {
+            const [row, col] = selectedCell;
+            const startRow = Math.floor(row / 3) * 3;
+            const startCol = Math.floor(col / 3) * 3;
+            const existingNumbers = new Set<number>();
+
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const num = board[startRow + i][startCol + j];
+                    if (num !== BLANK) existingNumbers.add(num);
+                }
+            }
+
+            return [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(n => !existingNumbers.has(n));
+        })()
+        : undefined;
+
     if (board.length === 0) return null;
 
     return (
@@ -270,10 +289,7 @@ export default function Game() {
 
             <Controls
                 onNumberClick={handleNumberClick}
-                onUndo={handleUndo}
-                onErase={handleErase}
-                onNoteToggle={() => setIsNoteMode(!isNoteMode)}
-                isNoteMode={isNoteMode}
+                validCandidates={validCandidates}
             />
 
             <AnimatePresence>
