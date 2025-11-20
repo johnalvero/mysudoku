@@ -1,52 +1,97 @@
 import { Difficulty } from "@/lib/sudoku";
-import { Timer } from "lucide-react";
+import { Sparkles, Flame } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface HeaderProps {
     difficulty: Difficulty;
-    mistakes: number;
-    time: number;
     onChangeDifficulty: (diff: Difficulty) => void;
+    combo: number;
 }
 
-export function Header({ difficulty, mistakes, time, onChangeDifficulty }: HeaderProps) {
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, "0")}`;
+export function Header({ difficulty, onChangeDifficulty, combo }: HeaderProps) {
+    const difficultyLabels: Record<Difficulty, string> = {
+        Easy: "Muggle",
+        Medium: "Demigod",
+        Hard: "Wizard",
     };
 
     return (
-        <div className="w-full max-w-md px-4 mb-4">
-            <div className="flex justify-between items-center mb-4">
-                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Sudoku</h1>
-                <div className="flex items-center gap-4 text-gray-600 dark:text-gray-300">
-                    <div className="flex items-center gap-1">
-                        <span className="font-medium">Mistakes:</span>
-                        <span className={mistakes >= 3 ? "text-red-500" : ""}>{mistakes}/3</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <Timer className="w-4 h-4" />
-                        <span>{formatTime(time)}</span>
-                    </div>
+        <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="w-full max-w-md px-4 mb-4"
+        >
+            <div className="flex flex-col items-center mb-6">
+                <motion.h1
+                    className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 mb-2 text-center"
+                    animate={{ backgroundPosition: ["0%", "100%", "0%"] }}
+                    transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+                >
+                    John & Ava&apos;s Sudoku
+                </motion.h1>
+                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-300">
+                    <motion.div
+                        animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.2, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                    >
+                        <Sparkles className="w-4 h-4" />
+                    </motion.div>
+                    <span className="text-sm font-medium italic">&quot;I solemnly swear that I am up to no good&quot;</span>
+                    <motion.div
+                        animate={{ rotate: [0, -15, 15, 0], scale: [1, 1.2, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 3, delay: 0.5 }}
+                    >
+                        <Sparkles className="w-4 h-4" />
+                    </motion.div>
                 </div>
             </div>
 
-            <div className="flex justify-between items-center">
-                <div className="flex gap-2">
+            <div className="flex justify-center items-center mb-4 bg-white/50 dark:bg-gray-800/50 p-3 rounded-xl backdrop-blur-sm border border-purple-100 dark:border-purple-900 relative overflow-hidden min-h-[3rem]">
+                <AnimatePresence mode="wait">
+                    {combo > 1 ? (
+                        <motion.div
+                            key="combo"
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            className="flex items-center gap-1 text-orange-500 font-bold z-10"
+                        >
+                            <Flame className="w-4 h-4 fill-orange-500" />
+                            <span>{combo}x Combo!</span>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="relax"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="text-purple-600 dark:text-purple-400 font-medium text-sm"
+                        >
+                            Relax & Enjoy
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            <div className="flex justify-center">
+                <div className="flex gap-2 bg-purple-100 dark:bg-purple-900/30 p-1 rounded-full">
                     {(["Easy", "Medium", "Hard"] as Difficulty[]).map((diff) => (
-                        <button
+                        <motion.button
                             key={diff}
                             onClick={() => onChangeDifficulty(diff)}
-                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${difficulty === diff
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${difficulty === diff
+                                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md"
+                                : "text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800"
                                 }`}
                         >
-                            {diff}
-                        </button>
+                            {difficultyLabels[diff]}
+                        </motion.button>
                     ))}
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 }

@@ -5,6 +5,10 @@ import { generateSudoku, Difficulty, BLANK } from "@/lib/sudoku";
 import { Header } from "./Header";
 import { Board } from "./Board";
 import { Controls } from "./Controls";
+import { FloatingText, FloatingTextItem } from "./FloatingText";
+import { ParticleBurst, ParticleItem } from "./ParticleBurst";
+import confetti from "canvas-confetti";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Game() {
     const [difficulty, setDifficulty] = useState<Difficulty>("Easy");
@@ -12,14 +16,14 @@ export default function Game() {
     const [initialBoard, setInitialBoard] = useState<number[][]>([]);
     const [solvedBoard, setSolvedBoard] = useState<number[][]>([]);
     const [notes, setNotes] = useState<Set<number>[][]>([]);
-    const [mistakes, setMistakes] = useState(0);
-    const [time, setTime] = useState(0);
-    const [isGameOver, setIsGameOver] = useState(false);
     const [isWon, setIsWon] = useState(false);
     const [selectedCell, setSelectedCell] = useState<[number, number] | null>(null);
     const [isNoteMode, setIsNoteMode] = useState(false);
-    const [history, setHistory] = useState<{ board: number[][]; notes: Set<number>[][]; mistakes: number }[]>([]);
+    const [history, setHistory] = useState<{ board: number[][]; notes: Set<number>[][]; combo: number }[]>([]);
     const [mistakeCells, setMistakeCells] = useState<boolean[][]>([]);
+    const [floatingTexts, setFloatingTexts] = useState<FloatingTextItem[]>([]);
+    const [particles, setParticles] = useState<ParticleItem[]>([]);
+    const [combo, setCombo] = useState(0);
 
     // Initialize game
     const startNewGame = useCallback((diff: Difficulty) => {
@@ -29,12 +33,12 @@ export default function Game() {
         setSolvedBoard(solvedBoard);
         setNotes(Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => new Set<number>())));
         setMistakeCells(Array.from({ length: 9 }, () => Array(9).fill(false)));
-        setMistakes(0);
-        setTime(0);
-        setIsGameOver(false);
         setIsWon(false);
         setHistory([]);
         setSelectedCell(null);
+        setFloatingTexts([]);
+        setParticles([]);
+        setCombo(0);
     }, []);
 
     // Initial load
@@ -49,18 +53,50 @@ export default function Game() {
     };
 
     useEffect(() => {
-        if (isGameOver || isWon) return;
-        const timer = setInterval(() => setTime((t) => t + 1), 1000);
-        return () => clearInterval(timer);
-    }, [isGameOver, isWon]);
+        if (isWon) {
+            const duration = 3 * 1000;
+            const animationEnd = Date.now() + duration;
+            const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+            const random = (min: number, max: number) => Math.random() * (max - min) + min;
+
+            const interval: NodeJS.Timeout = setInterval(function () {
+                const timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                const particleCount = 50 * (timeLeft / duration);
+                confetti({ ...defaults, particleCount, origin: { x: random(0.1, 0.3), y: Math.random() - 0.2 } });
+                confetti({ ...defaults, particleCount, origin: { x: random(0.7, 0.9), y: Math.random() - 0.2 } });
+            }, 250);
+        }
+    }, [isWon]);
+
+    const triggerFloatingText = (text: string, color: string, x: number, y: number) => {
+        const id = Date.now();
+        setFloatingTexts(prev => [...prev, { id, text, x, y, color }]);
+        setTimeout(() => {
+            setFloatingTexts(prev => prev.filter(item => item.id !== id));
+        }, 1000);
+    };
+
+    const triggerParticles = (x: number, y: number, color: string) => {
+        const id = Date.now();
+        setParticles(prev => [...prev, { id, x, y, color }]);
+        setTimeout(() => {
+            setParticles(prev => prev.filter(item => item.id !== id));
+        }, 1000);
+    };
 
     const handleCellClick = useCallback((row: number, col: number) => {
-        if (isGameOver || isWon) return;
+        if (isWon) return;
         setSelectedCell([row, col]);
-    }, [isGameOver, isWon]);
+    }, [isWon]);
 
     const handleNumberClick = useCallback((num: number) => {
-        if (isGameOver || isWon || !selectedCell) return;
+        if (isWon || !selectedCell) return;
         const [row, col] = selectedCell;
 
         // Cannot edit initial cells
@@ -70,7 +106,7 @@ export default function Game() {
         setHistory(prev => [...prev, {
             board: board.map(r => [...r]),
             notes: notes.map(r => r.map(s => new Set(s))),
-            mistakes
+            combo
         }]);
 
         if (isNoteMode) {
@@ -88,14 +124,17 @@ export default function Game() {
 
             // Check if move is correct against solved board
             if (num !== solvedBoard[row][col]) {
-                setMistakes(m => {
-                    const newMistakes = m + 1;
-                    if (newMistakes >= 3) setIsGameOver(true);
-                    return newMistakes;
-                });
+                setCombo(0); // Reset combo on mistake
                 const newMistakeCells = mistakeCells.map(r => [...r]);
                 newMistakeCells[row][col] = true;
                 setMistakeCells(newMistakeCells);
+
+                // Get cell position for floating text
+                const cellElement = document.querySelector(`[data-cell="${row}-${col}"]`);
+                if (cellElement) {
+                    const rect = cellElement.getBoundingClientRect();
+                    triggerFloatingText("Oops!", "#ef4444", rect.left + rect.width / 2, rect.top);
+                }
 
                 // Clear mistake highlight after 1s
                 setTimeout(() => {
@@ -108,6 +147,27 @@ export default function Game() {
             } else {
                 // Correct move
                 setBoard(newBoard);
+                setCombo(c => c + 1);
+
+                // Get cell position for floating text and particles
+                const cellElement = document.querySelector(`[data-cell="${row}-${col}"]`);
+                if (cellElement) {
+                    const rect = cellElement.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+
+                    const phrases = ["Magical!", "Brilliant!", "Spectacular!", "Wicked!", "+10 XP"];
+                    const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+
+                    // Show combo text if combo > 0 (it will be 1 after this update, so check current combo + 1)
+                    // Actually state update is async, so we use the value we know it will be
+                    const newCombo = combo + 1;
+                    const textToShow = newCombo > 1 ? `${newCombo}x Combo!` : randomPhrase;
+                    const color = newCombo > 1 ? "#f59e0b" : "#9333ea"; // Orange for combo, Purple for normal
+
+                    triggerFloatingText(textToShow, color, centerX, rect.top);
+                    triggerParticles(centerX, centerY, color);
+                }
 
                 // Clear notes in related row/col/box
                 const newNotes = notes.map(r => r.map(s => new Set(s)));
@@ -139,20 +199,20 @@ export default function Game() {
                 if (filled) setIsWon(true);
             }
         }
-    }, [isGameOver, isWon, selectedCell, initialBoard, board, notes, mistakes, isNoteMode, solvedBoard, mistakeCells]);
+    }, [isWon, selectedCell, initialBoard, board, notes, isNoteMode, solvedBoard, mistakeCells, combo]);
 
     const handleUndo = useCallback(() => {
-        if (history.length === 0 || isGameOver || isWon) return;
+        if (history.length === 0 || isWon) return;
         const previousState = history[history.length - 1];
         setBoard(previousState.board);
         setNotes(previousState.notes);
-        setMistakes(previousState.mistakes);
+        setCombo(previousState.combo);
         setHistory(prev => prev.slice(0, -1));
         setMistakeCells(Array.from({ length: 9 }, () => Array(9).fill(false)));
-    }, [history, isGameOver, isWon]);
+    }, [history, isWon]);
 
     const handleErase = useCallback(() => {
-        if (isGameOver || isWon || !selectedCell) return;
+        if (isWon || !selectedCell) return;
         const [row, col] = selectedCell;
         if (initialBoard[row][col] !== BLANK) return;
 
@@ -161,12 +221,12 @@ export default function Game() {
             newBoard[row][col] = BLANK;
             return newBoard;
         });
-    }, [isGameOver, isWon, selectedCell, initialBoard]);
+    }, [isWon, selectedCell, initialBoard]);
 
     // Keyboard support
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (isGameOver || isWon) return;
+            if (isWon) return;
 
             if (e.key >= "1" && e.key <= "9") {
                 handleNumberClick(parseInt(e.key));
@@ -185,17 +245,18 @@ export default function Game() {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isGameOver, isWon, selectedCell, handleNumberClick, handleErase]);
+    }, [isWon, selectedCell, handleNumberClick, handleErase]);
 
     if (board.length === 0) return null;
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950 py-8">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950 py-8 overflow-hidden">
+            <FloatingText items={floatingTexts} />
+            <ParticleBurst items={particles} />
             <Header
                 difficulty={difficulty}
-                mistakes={mistakes}
-                time={time}
                 onChangeDifficulty={handleDifficultyChange}
+                combo={combo}
             />
 
             <Board
@@ -215,38 +276,40 @@ export default function Game() {
                 isNoteMode={isNoteMode}
             />
 
-            {/* Game Over Modal */}
-            {isGameOver && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-xl text-center max-w-sm mx-4">
-                        <h2 className="text-3xl font-bold text-red-600 mb-4">Game Over</h2>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6">You made 3 mistakes. Better luck next time!</p>
-                        <button
-                            onClick={() => startNewGame(difficulty)}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-full font-medium hover:bg-blue-700 transition-colors"
+            <AnimatePresence>
+                {/* Success Modal */}
+                {isWon && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.5, opacity: 0, y: 50 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.5, opacity: 0, y: 50 }}
+                            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+                            className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl text-center max-w-sm mx-4 border-2 border-purple-200 dark:border-purple-900"
                         >
-                            Try Again
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Success Modal */}
-            {isWon && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-xl text-center max-w-sm mx-4">
-                        <h2 className="text-3xl font-bold text-green-600 mb-4">Solved!</h2>
-                        <p className="text-gray-600 dark:text-gray-300 mb-2">Difficulty: {difficulty}</p>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6">Time: {Math.floor(time / 60)}:{(time % 60).toString().padStart(2, "0")}</p>
-                        <button
-                            onClick={() => startNewGame(difficulty)}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-full font-medium hover:bg-blue-700 transition-colors"
-                        >
-                            New Game
-                        </button>
-                    </div>
-                </div>
-            )}
+                            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600 mb-4 font-serif">
+                                Mischief Managed!
+                            </h2>
+                            <p className="text-gray-600 dark:text-gray-300 mb-2 font-medium">
+                                {difficulty === "Easy" ? "Not bad for a Muggle!" : difficulty === "Medium" ? "A true Demigod!" : "Merlin's Beard, you did it!"}
+                            </p>
+                            <motion.button
+                                onClick={() => startNewGame(difficulty)}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full font-medium hover:shadow-lg transition-all"
+                            >
+                                New Adventure
+                            </motion.button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
