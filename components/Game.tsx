@@ -269,7 +269,7 @@ export default function Game() {
     if (board.length === 0) return null;
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950 py-8 overflow-hidden">
+        <div className="flex flex-col items-center justify-start min-h-screen bg-gray-50 dark:bg-gray-950 py-4 overflow-hidden">
             <FloatingText items={floatingTexts} />
             <ParticleBurst items={particles} />
             <Header
